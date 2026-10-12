@@ -1,24 +1,31 @@
 # 진행 상황  (갱신: 2026-10-12)
 
 ## 현재 단계
-1단계(프레임 매칭) 알고리즘 완성, 샘플 7장 통과. 2단계(렌더·내보내기)는 HDR 유지 조사만 끝남, 구현 미착수.
+1단계(프레임 매칭) 완성. 2단계(렌더·내보내기) 코어 구현 완료 — macOS에서 샘플 7장 합성·HLG 내보내기 확인. 실기기 확인은 3단계(UI)에서.
 
 ## 직전 완료 (2026-10-12)
+- 2단계 코어: `PhotoPlacement`(매칭 결과 → crop 비율·오프셋), `EffectTimeline`(시각별 오버레이 사각형, 순수 함수),
+  `EffectRenderer`(AVMutableComposition + CIFilter 핸들러 합성 → AVAssetExportSession HEVC, 불가 시 H.264), `EffectConfig`(고정값).
+  `clickcore-cli render`로 샘플 7장 합성 — 출력 hvc1 10bit HLG + dvvC 유지(AVMutableComposition 경유 확인), 정지·축소·썸네일 프레임 눈으로 확인.
+  사용자 결정: 정지 0.7s + 좌하단 축소 이동 0.3s / 찰칵 음원 미정(무음, `shutterSoundURL`만 열어둠) / 최소 iOS 17 유지(deprecated 합성 API 사용).
+  추정값(사용자 미확인): 썸네일 폭 22%·여백 4%·2차 ease-out. 적대 리뷰 31건 중 프리셋 폴백 미작동·셔터음 insert 밀림·출력 파일 무단 삭제 등 반영,
+  합성 좌표 변환은 단위 테스트 4개 작성 + 이 Mac에서 같은 단언을 `scripts/composite_check`(swift run)로 9/9 통과 확인. 셔터음 트랙 삽입 코드는 음원이 없어 미실행.
 - HDR(HLG) 유지 내보내기 가능 여부 조사 → 가능(아래 실측). `scripts/hdr_export_probe.swift`로 이 Mac(macOS, CLT)에서 실측.
-  결정: 내보내기는 AVAssetExportSession + `AVAssetExportPresetHEVCHighestQuality` + CIFilter 핸들러 합성, 색 속성은 지정하지 않음(기본 정책이 HLG 유지). 실제 기기(iOS 26) 확인은 2단계 구현 때.
+  결정: 내보내기는 AVAssetExportSession + `AVAssetExportPresetHEVCHighestQuality` + CIFilter 핸들러 합성, 색 속성은 지정하지 않음(기본 정책이 HLG 유지). 실제 기기(iOS 26) 확인은 3단계(UI)에서.
 - FrameMatcher: 프레임마다 Vision 평행이동 d 추정(crop 1.0) → |d| 최소 프레임, 동률(같은 크기)은 NCC. 최소 |d|가 폭의 5% 초과면 NCC 폴백.
   검증: `clickcore-cli match`로 확정 4장 ±1프레임(4178→5.300, 4179→8.533, 4180→11.067, 4182→15.865), 4176→1.433·4177→3.433·4181→14.932 구간 안.
   적대 리뷰 12건 반영(Vision dy 부호를 이미지 좌표계로 뒤집음 등). 단위·샘플 테스트 5파일은 작성만(이 Mac에 XCTest 없음).
 
 ## 지금 할 일
-1. Xcode 있는 Mac에서 `swift test` 실행해 SampleMatchTests·단위 테스트 통과 확인.
-2. 2단계: 사진을 프레임에 맞춰 crop(비율·d 반영) → 정지·찰칵·갤러리 효과 합성 → 내보내기.
-   합성은 CIFilter 핸들러(`applyingCIFiltersWithHandler`) 경로, 찰칵 소리는 AVMutableComposition에 오디오 트랙 추가 + AVAudioMix. AVMutableComposition을 거쳐도 HLG가 유지되는지는 미실측(조사는 AVURLAsset 직접 내보내기만 했음).
+1. Xcode 있는 Mac에서 `swift test` 실행해 전체 테스트(매칭 + EffectTimeline·PhotoPlacement·EffectRendererComposite) 통과 확인.
+2. 3단계(UI): 영상 선택 → 녹화 시간대 사진 자동 탐색(PhotoKit) → 제외 선택 → 렌더 → 사진 보관함 저장. Xcode 필요.
+3. 실기기(iPhone 16, iOS 26)에서 HLG 유지·정지 화면 밝기 확인(성공 기준 2).
 
 ## 열린 결정
 - (해결) 내보내기 형식: HLG 유지, HEVC. SDR로 바꿔야 할 때는 `AVAssetExportPresetHighestQuality`(H.264·BT.709)를 쓰면 됨(실측).
 - 정지 화면(SDR 사진)이 HDR 디스플레이에서 영상 하이라이트보다 어둡게 보일지 — 기기에서 봐야 안다. 어두우면 사진에 헤드룸을 주는 처리(예: 톤 올리기)를 그때 결정.
-- `init(asset:applyingCIFiltersWithHandler:)`는 iOS 18에서 deprecated(대체 `AVVideoComposition.videoComposition(with:applyingCIFiltersWithHandler:)` async, iOS 18+). 최소 iOS 17이라 당분간 deprecated API 사용. 최소 버전을 올릴지는 사용자 결정.
+- 찰칵 음원: 시스템 셔터음(AudioServices 1108)은 재생 API만 있고 파일로 꺼내 쓸 수 없다(추정, 출처 미확인). 라이선스 확인된 파일을 받거나 합성음을 만들거나. 결정 전까지 무음.
+- (해결 2026-10-12) 합성 API: 최소 iOS 17 유지, `init(asset:applyingCIFiltersWithHandler:)`(iOS 18 deprecated) 사용. `export(to:as:)`·`states(updateInterval:)`도 iOS 18이라 `export()` + `progress` 폴링.
 
 ## 막힌 것
 - 이 Mac(CLT만)에는 XCTest·Xcode 없음 → 테스트와 2·3단계 앱 빌드는 Xcode 있는 Mac에서. 당분간 clickcore-cli로 실험.
@@ -32,6 +39,7 @@
 - 패닝(4179)에서 dx가 +4→−3 단조 변화하며 정답에서 0 통과 — NCC 봉우리(평평)보다 변별력 큼.
 - 프레임 PTS는 1/30s 격자에 가깝지만 균일하지 않음(간격 최대 0.035s, 총 544프레임). AVAssetImageGenerator는 요청 시각 절삭으로 한 프레임 앞을 주므로 AVAssetReader PTS를 쓴다.
 - HDR 내보내기(macOS 26 CLT 실측, iOS 기기 미확인): 샘플 영상은 hvc1 BitsPerComponent=10 BT.2020/HLG + `dvvC` 아톰(추정: Dolby Vision 8.4, 프로파일은 안 읽음). CIFilter 핸들러 합성(사진 1초 덮어쓰기)을 `AVAssetExportPresetHEVCHighestQuality`로 내보내면 색 속성 지정 없이도 출력이 hvc1 10bit BT.2020/HLG + dvvC로 유지됨(HLG 명시 지정과 포맷 설명 수준에서 동일, 픽셀 비교는 안 함). `AVAssetExportPresetHighestQuality`는 avc1 8bit BT.709로 SDR 변환. 오디오는 원본 2트랙(AAC 스테레오 enabled, APAC 4ch 공간음향 disabled) 중 AAC 스테레오만 남음(네 변형 모두). 출력은 회전이 구워져 1080×1920(원본 1920×1080 + 변환 행렬). 18s 내보내기 약 3s.
+- 2단계 합성(macOS 26 CLT 실측): AVMutableComposition(비디오 + 활성 오디오 트랙 복사, preferredTransform 복사) + CIFilter 핸들러 → HEVC 프리셋 출력도 hvc1 10bit HLG + dvvC 유지. 18s 영상 사진 7장 합성 약 3.5s. 4176은 crop 0.92 + 오프셋 +0.05로 창이 사진 오른쪽을 1% 넘어 → 창을 안쪽으로 미는 보정 추가.
 - 샘플 사진: Display P3 8bit, HDR 게인맵 없음. `expandToHDR` 옵션으로도 1.0 초과 값 없음 → SDR. HLG 합성에 넣은 사진 프레임을 SDR로 톤매핑해 보면 같은 장면의 영상 프레임과 밝기가 비슷해 보임(눈 비교, 수치 없음).
 - 미확인: 샘플 jpg가 HEIC 변환본인지 / 4K·60fps·타 기기에서의 밀림·해상도.
 - 미확인(확인 필요, 샘플 요청): ① 가로 영상+가로 사진 — 회전 분기(0/180°)는 있으나 실측 없음. ② 녹화 중 폰을 돌려 찍은 사진 — 사진 EXIF 방향이 영상과 다르면 크기 불일치로 매칭이 nil. iOS가 그렇게 저장하는지부터 미확인.
