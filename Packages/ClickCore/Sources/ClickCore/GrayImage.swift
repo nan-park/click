@@ -88,6 +88,15 @@ public struct GrayImage: Sendable {
         return top * (1 - ty) + bot * ty
     }
 
+    /// Vision 입력용 8비트 그레이 CGImage.
+    public func toCGImage() -> CGImage? {
+        let bytes = pixels.map { UInt8((min(max($0, 0), 1) * 255).rounded()) }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,
+                       space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+
     /// 시계 방향 90° × `quarterTurns` 회전.
     public func rotated(quarterTurns: Int) -> GrayImage {
         let turns = ((quarterTurns % 4) + 4) % 4

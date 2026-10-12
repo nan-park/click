@@ -3,15 +3,24 @@ import ClickCore
 
 // 실험용 CLI.
 //   clickcore-cli meta <video> <photo...>    사진별 계산 위치와 탐색 구간
-//   clickcore-cli frames <video> <photo>     탐색 구간의 프레임 PTS 목록
+//   clickcore-cli frames <video> <photo...>  탐색 구간의 프레임 PTS 목록
+//   clickcore-cli match <video> <photo...>   사진별 판정 프레임·방법·점수
+//   clickcore-cli align <video> <photo...>   프레임별 NCC와 Vision 이동량 (판정 과정 확인용)
 let args = Array(CommandLine.arguments.dropFirst())
 guard args.count >= 2 else {
-    print("usage: clickcore-cli <meta|frames> <video> <photo...>")
+    print("usage: clickcore-cli <meta|frames|match|align> <video> <photo...>")
     exit(2)
 }
 let command = args[0]
 let videoURL = URL(fileURLWithPath: args[1])
 let photoURLs = args.dropFirst(2).map { URL(fileURLWithPath: $0) }
+
+func describe(_ ncc: (score: Float, cropRatio: Double)?) -> String {
+    ncc.map { String(format: "%.3f(r%.2f)", $0.score, $0.cropRatio) } ?? "-"
+}
+func describe(_ t: VisionAligner.Translation?) -> String {
+    t.map { String(format: "(%+.0f,%+.0f)|%.1f|", $0.dx, $0.dy, $0.magnitude) } ?? "-"
+}
 
 let iso = ISO8601DateFormatter()
 iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -36,6 +45,31 @@ Task {
                 let frames = try await FrameExtractor.frames(url: videoURL, in: w)
                 let times = frames.map { String(format: "%.3f", $0.time) }.joined(separator: " ")
                 print("\(url.lastPathComponent) \(frames.count) frames \(frames.first?.image.width ?? 0)x\(frames.first?.image.height ?? 0): \(times)")
+            }
+        case "match":
+            for url in photoURLs {
+                let p = try PhotoTimestamp.read(from: url)
+                let w = SearchWindow(photo: p, video: video)
+                let frames = try await FrameExtractor.frames(url: videoURL, in: w)
+                let photo = try ImageLoader.loadGray(url: url)
+                guard let r = try FrameMatcher.match(photo: photo, frames: frames) else { print("\(url.lastPathComponent): no match"); continue }
+                let b = r.best
+                print(String(format: "%@ nominal=%.3f best=%.3f off=%+.3f method=%@ ncc=%@ d=%@",
+                             url.lastPathComponent, w.nominalOffset, b.time, b.time - w.nominalOffset,
+                             "\(r.method)", describe(b.ncc), describe(b.translation)))
+            }
+        case "align":
+            for url in photoURLs {
+                let p = try PhotoTimestamp.read(from: url)
+                let w = SearchWindow(photo: p, video: video)
+                let frames = try await FrameExtractor.frames(url: videoURL, in: w)
+                let photo = try ImageLoader.loadGray(url: url)
+                guard let r = try FrameMatcher.match(photo: photo, frames: frames) else { print("\(url.lastPathComponent): no match"); continue }
+                print("== \(url.lastPathComponent) nominal=\(String(format: "%.3f", w.nominalOffset)) method=\(r.method)")
+                for c in r.candidates {
+                    print(String(format: "%.3f ncc=%@ d=%@%@", c.time, describe(c.ncc), describe(c.translation),
+                                 c.time == r.best.time ? "  <== best" : ""))
+                }
             }
         default:
             print("unknown command \(command)")
