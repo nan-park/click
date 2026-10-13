@@ -1,7 +1,21 @@
-# 진행 상황  (갱신: 2026-10-12)
+# 진행 상황  (갱신: 2026-10-13)
 
 ## 현재 단계
-1단계(프레임 매칭) 완성. 2단계(렌더·내보내기) 코어 구현 완료 — macOS에서 샘플 7장 합성·HLG 내보내기 확인. 실기기 확인은 3단계(UI)에서.
+1·2단계 코어 완성(macOS 실측). 3단계(UI) 소스 작성 완료 — **미컴파일**. 이 Mac에 Xcode·iOS SDK가 없어 `swiftc -parse` 문법 검사만 통과.
+`Click.xcodeproj`는 아직 없음 → `Click/XCODE_SETUP.md` 절차로 Xcode 있는 Mac에서 생성.
+
+## 직전 완료 (2026-10-13)
+- 3단계 UI 소스 `Click/` 6파일: `ClickApp`(진입) · `AppConfig`(앱 층 고정값) · `PhotoLibraryService`(권한·녹화 시간대 사진 탐색·원본 추출·썸네일·저장) ·
+  `MatchPipeline`(cli `render`와 같은 순서로 매칭→배치, `nonisolated`) · `SessionModel`(@Observable 상태기계: 영상 선택→탐색→제외 검토→매칭→렌더→저장) ·
+  `ContentView`(PhotosPicker `.videos`/`.current` → 후보 목록 Toggle(제외만) → 진행 → 완료/실패).
+  영상은 PhotosPicker Transferable로 파일 사본을 받아 `VideoTimestamp.read` → `creationDate` ± `candidateSearchPadding`(5s, 추정)로 PHAsset 사진 조회.
+  사진은 `PHAssetResourceManager.writeData` 원본(EXIF 유지)으로 임시 폴더에 쓰고 코어에 URL로 넘김. 결과는 `creationRequestForAssetFromVideo`로 보관함 저장.
+  적대 리뷰 15건 중 반영: 매칭 함수 `nonisolated`(기본 격리 MainActor 대비) / 취소 시 pickedItem 초기화(같은 영상 재선택 불가 버그) /
+  사진 임시 파일명에 인덱스(originalFilename 충돌) / 전부 실패 시 첫 실패 사유를 에러에 포함 / 썸네일 요청을 px(displayScale 곱) / 출력 확장자를 코어 outputFileType에서 파생 /
+  렌더 진행률 Task가 saving 뒤 늦게 와도 단계 안 되돌림 / 임포트 사본·이전 워크스페이스 정리 / Info.plist 파일 삭제(필수 키 없이 GENERATE=No면 설치 실패) → 키는 SETUP 문서로.
+  기각: SwiftUI 간격 리터럴 상수화(관례상 인라인, 썸네일 치수만 AppConfig로) / `MatchPipeline`을 코어로 이동(등급 A, 아래 제안).
+  리뷰 지적 범위 안의 수정이라 재리뷰 생략.
+- 미커밋이던 썸네일 22%/4% 확정 기록 커밋(리뷰 생략은 사용자 결정).
 
 ## 직전 완료 (2026-10-12)
 - 2단계 코어: `PhotoPlacement`(매칭 결과 → crop 비율·오프셋), `EffectTimeline`(시각별 오버레이 사각형, 순수 함수),
@@ -16,19 +30,23 @@
   검증: `clickcore-cli match`로 확정 4장 ±1프레임(4178→5.300, 4179→8.533, 4180→11.067, 4182→15.865), 4176→1.433·4177→3.433·4181→14.932 구간 안.
   적대 리뷰 12건 반영(Vision dy 부호를 이미지 좌표계로 뒤집음 등). 단위·샘플 테스트 5파일은 작성만(이 Mac에 XCTest 없음).
 
-## 지금 할 일
-1. Xcode 있는 Mac에서 `swift test` 실행해 전체 테스트(매칭 + EffectTimeline·PhotoPlacement·EffectRendererComposite) 통과 확인.
-2. 3단계(UI): 영상 선택 → 녹화 시간대 사진 자동 탐색(PhotoKit) → 제외 선택 → 렌더 → 사진 보관함 저장. Xcode 필요.
-3. 실기기(iPhone 16, iOS 26)에서 HLG 유지·정지 화면 밝기 확인(성공 기준 2).
+## 지금 할 일 (전부 Xcode 있는 Mac 필요)
+1. `Packages/ClickCore`에서 `swift test` — 매칭 + EffectTimeline·PhotoPlacement·EffectRendererComposite 통과 확인.
+2. `Click/XCODE_SETUP.md`대로 `Click.xcodeproj` 생성 → `Click/` 컴파일. 컴파일 오류는 UI 소스가 미컴파일이라 있을 수 있음(특히 액터 격리·PhotosPicker API).
+3. 실기기(iPhone 16, iOS 26)에서 전체 흐름 실행 → 보관함 저장(성공 기준 2) + HLG 유지·정지 화면 밝기 확인.
+   첫 실행에서 확인할 추정값: PhotoKit `creationDate`가 EXIF 시각과 같은지(탐색 패딩 5s가 충분한지), Transferable `.current`가 원본 파일(creationdate 메타 포함)을 주는지.
+
+## 제안 (미승인)
+- `MatchPipeline`(UI·PhotoKit 의존 없는 코어 조합)을 `Packages/ClickCore`로 옮기면 `swift test`·cli가 같은 코드를 쓴다. 등급 A라 보류.
 
 ## 열린 결정
 - (해결) 내보내기 형식: HLG 유지, HEVC. SDR로 바꿔야 할 때는 `AVAssetExportPresetHighestQuality`(H.264·BT.709)를 쓰면 됨(실측).
 - 정지 화면(SDR 사진)이 HDR 디스플레이에서 영상 하이라이트보다 어둡게 보일지 — 기기에서 봐야 안다. 어두우면 사진에 헤드룸을 주는 처리(예: 톤 올리기)를 그때 결정.
-- 찰칵 음원: 시스템 셔터음(AudioServices 1108)은 재생 API만 있고 파일로 꺼내 쓸 수 없다(추정, 출처 미확인). 라이선스 확인된 파일을 받거나 합성음을 만들거나. 결정 전까지 무음.
+- (해결 2026-10-13) 찰칵 음원: 첫 버전은 무음 유지(사용자 결정). `shutterSoundURL`은 열어둠. 시스템 셔터음(AudioServices 1108)은 파일로 못 꺼낸다(추정, 출처 미확인).
 - (해결 2026-10-12) 합성 API: 최소 iOS 17 유지, `init(asset:applyingCIFiltersWithHandler:)`(iOS 18 deprecated) 사용. `export(to:as:)`·`states(updateInterval:)`도 iOS 18이라 `export()` + `progress` 폴링.
 
 ## 막힌 것
-- 이 Mac(CLT만)에는 XCTest·Xcode 없음 → 테스트와 2·3단계 앱 빌드는 Xcode 있는 Mac에서. 당분간 clickcore-cli로 실험.
+- 이 Mac(CLT만)에는 XCTest·Xcode·iOS SDK 없음 → 테스트·앱 빌드·xcodeproj 생성은 Xcode 있는 Mac에서. 2026-10-13 세션도 같은 Mac이라 UI는 소스만 작성.
 - 이 Mac의 `/usr/bin/python3`에 PIL 없음(다른 python3 없음). 이미지 확인은 `sips`로 JPEG 축소 후 보는 식으로 대신함. CLAUDE.md "검증은 PIL로"는 현재 이 Mac에서 못 씀.
 
 ## 실측 (다시 조사하지 말 것)
