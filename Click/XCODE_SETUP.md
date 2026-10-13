@@ -1,23 +1,26 @@
-# Click.xcodeproj 만들기
+# Click.xcodeproj 설정 노트
 
-`Click.xcodeproj`는 Xcode 없는 Mac에서 소스만 작성됐기 때문에 아직 없다. Xcode 있는 Mac에서 한 번만 만든다.
-작성 기준: Xcode 26(macOS 26) · iOS 17 SDK 이상. 소스는 `@Observable`·`onChange(of:_:)` 두 인자 등 iOS 17 API만 쓴다.
+`Click.xcodeproj/project.pbxproj`는 손으로 작성했고(2026-10-13, Xcode 27.0) `xcodebuild`로 시뮬레이터·기기 아키텍처 빌드와
+시뮬레이터 실행을 확인했다. Xcode GUI로 열어 수정해도 된다. 커밋 대상은 `project.pbxproj`뿐이며, GUI로 처음 열면
+`project.xcworkspace/contents.xcworkspacedata`가 생긴다(커밋해도 무방). 앱 아이콘·Assets.xcassets는 아직 없다.
 
-1. **프로젝트는 저장소 밖**(예: `~/Desktop`)에 만든다. File → New → Project → iOS App,
-   Product Name `Click`, Interface SwiftUI, Language Swift, "Create Git repository" 해제.
-   저장소 루트에 바로 만들면 이미 있는 `Click/` 폴더와 충돌한다.
-2. 생성된 `Click.xcodeproj`만 저장소 루트(`click/`)로 옮긴다. 템플릿의 `Click/` 소스 폴더는 버린다.
-   Xcode 16+ 템플릿은 `Click/`을 동기화 폴더로 잡으므로 저장소의 `Click/*.swift`가 자동으로 타겟에 들어간다.
-   `Click/XCODE_SETUP.md`는 번들 리소스로 끌려가지 않게 해당 파일 → File Inspector → Target Membership 해제.
-3. File → Add Package Dependencies… → Add Local… → `Packages/ClickCore` → 타겟 `Click`에 `ClickCore` 라이브러리 연결.
-4. 타겟 General → Minimum Deployments iOS 17.0. Supported Destinations는 **iPhone만**(iPad·Mac 제거 — CLAUDE.md 비목표).
-   Device Orientation은 Portrait만.
-5. 타겟 Info → Custom iOS Target Properties에 두 키를 추가한다(`GENERATE_INFOPLIST_FILE`은 기본값 Yes 유지):
-   - `NSPhotoLibraryUsageDescription` = `녹화 중 찍은 사진을 자동으로 찾기 위해 사진 보관함 전체를 읽습니다.`
-   - `NSPhotoLibraryAddUsageDescription` = `효과를 넣은 영상을 사진 보관함에 저장합니다.`
-6. Build Settings → Swift Language Version **Swift 5**, Default Actor Isolation **nonisolated**(Xcode 26 템플릿 기본은 MainActor).
-   `MatchPipeline`은 `nonisolated`를 명시해 두었지만, 기본 격리가 MainActor면 `PhotoLibraryService`가 비-Sendable `PHAsset`을
-   넘기는 지점에서 Swift 6 모드 오류가 날 수 있어 위 조합을 기준으로 한다.
-7. Signing & Capabilities → 개발 팀 선택. 실기기(iPhone 16, iOS 26)에서 실행.
+## 실기기 실행 전에 할 것
+- **번들 ID**: `PRODUCT_BUNDLE_IDENTIFIER = local.Click` 은 자리표시자다. 서명·설치에는 자기 도메인 역순 ID가 필요하니
+  타겟 Signing & Capabilities에서 바꾼다.
+- **개발 팀**: `DEVELOPMENT_TEAM`이 비어 있다. 같은 탭에서 Team을 고른다(자동 서명).
 
-생성된 `Click.xcodeproj/project.pbxproj`는 커밋한다. `xcuserdata/`는 `.gitignore`에 이미 있다.
+## 고정해 둔 설정과 이유
+| 설정 | 값 | 이유 |
+| --- | --- | --- |
+| IPHONEOS_DEPLOYMENT_TARGET | 17.0 | CLAUDE.md 최소 iOS |
+| TARGETED_DEVICE_FAMILY | 1 (iPhone) | 비목표: iPad |
+| SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD / SUPPORTS_XR_… | NO | 비목표: Mac. Xcode 기본은 YES라 명시 |
+| UISupportedInterfaceOrientations_iPhone | Portrait·LandscapeLeft·LandscapeRight | 사용자 결정 2026-10-13. 가로 전용 레이아웃은 없음 |
+| developmentRegion | ko | 사용자 결정 2026-10-13. UI 문구는 한국어 리터럴 |
+| SWIFT_VERSION | 5.0 | 코어 패키지(tools 5.9)와 같은 언어 모드 |
+| SWIFT_DEFAULT_ACTOR_ISOLATION | nonisolated | Xcode 26+ 템플릿 기본(MainActor)이면 동기 매칭이 메인 스레드로 가고, 비-Sendable `PHAsset` 전달이 경고(Swift 5 모드)·오류(6 모드)가 된다. `MatchPipeline`은 별도로 `nonisolated` 명시 |
+| GENERATE_INFOPLIST_FILE | YES | 권한 문구는 `INFOPLIST_KEY_NSPhotoLibraryUsageDescription`·`…AddUsageDescription`으로 생성 plist에 병합 |
+| 패키지 | `Packages/ClickCore` 로컬 참조 | 외부 라이브러리 없음 |
+
+소스는 `Click/` 그룹에 파일 단위로 참조한다(동기화 폴더 아님). 새 `.swift`를 추가하면 Xcode에서 타겟에 넣어야 한다.
+`XCODE_SETUP.md`는 그룹에만 있고 Resources 단계에는 없다.

@@ -1,10 +1,14 @@
 # 진행 상황  (갱신: 2026-10-13)
 
 ## 현재 단계
-1·2단계 코어 완성(macOS 실측). 3단계(UI) 소스 작성 완료 — **미컴파일**. 이 Mac에 Xcode·iOS SDK가 없어 `swiftc -parse` 문법 검사만 통과.
-`Click.xcodeproj`는 아직 없음 → `Click/XCODE_SETUP.md` 절차로 Xcode 있는 Mac에서 생성.
+1·2단계 코어 완성. 3단계(UI) 소스 + `Click.xcodeproj` 완성 — Xcode 27.0에서 시뮬레이터·기기 아키텍처 빌드 통과, 시뮬레이터 실행 시 첫 화면 확인.
+사진 선택 이후 흐름(권한·탐색·매칭·렌더·저장)은 실기기 미확인.
 
 ## 직전 완료 (2026-10-13)
+- Xcode 27.0 설치 후: `swift test` 26개 전부 통과(샘플 매칭 테스트 2개 포함, 53s). `Click.xcodeproj/project.pbxproj`를 손으로 작성(objectVersion 60, 파일 단위 참조,
+  로컬 패키지 참조) → `xcodebuild` iOS Simulator·generic iOS 빌드 성공(오류·경고 0). iPhone 18 Pro 시뮬레이터(iOS 27)에 설치·실행 → 첫 화면 정상, 크래시 로그 없음.
+  번들 ID는 자리표시자 `local.Click`, 개발 팀 비어 있음 — 실기기 전에 사용자가 지정(`Click/XCODE_SETUP.md`).
+  사용자 결정: 화면 방향 iPhone 세로+가로 / developmentRegion ko. 적대 리뷰 7건 중 Mac(Designed for iPhone) 대상 끔·없는 AccentColor 설정 제거 반영.
 - 3단계 UI 소스 `Click/` 6파일: `ClickApp`(진입) · `AppConfig`(앱 층 고정값) · `PhotoLibraryService`(권한·녹화 시간대 사진 탐색·원본 추출·썸네일·저장) ·
   `MatchPipeline`(cli `render`와 같은 순서로 매칭→배치, `nonisolated`) · `SessionModel`(@Observable 상태기계: 영상 선택→탐색→제외 검토→매칭→렌더→저장) ·
   `ContentView`(PhotosPicker `.videos`/`.current` → 후보 목록 Toggle(제외만) → 진행 → 완료/실패).
@@ -28,12 +32,10 @@
   결정: 내보내기는 AVAssetExportSession + `AVAssetExportPresetHEVCHighestQuality` + CIFilter 핸들러 합성, 색 속성은 지정하지 않음(기본 정책이 HLG 유지). 실제 기기(iOS 26) 확인은 3단계(UI)에서.
 - FrameMatcher: 프레임마다 Vision 평행이동 d 추정(crop 1.0) → |d| 최소 프레임, 동률(같은 크기)은 NCC. 최소 |d|가 폭의 5% 초과면 NCC 폴백.
   검증: `clickcore-cli match`로 확정 4장 ±1프레임(4178→5.300, 4179→8.533, 4180→11.067, 4182→15.865), 4176→1.433·4177→3.433·4181→14.932 구간 안.
-  적대 리뷰 12건 반영(Vision dy 부호를 이미지 좌표계로 뒤집음 등). 단위·샘플 테스트 5파일은 작성만(이 Mac에 XCTest 없음).
+  적대 리뷰 12건 반영(Vision dy 부호를 이미지 좌표계로 뒤집음 등). 단위·샘플 테스트 5파일은 작성만(이 Mac에 XCTest 없음 → 2026-10-13 Xcode 설치 후 전부 통과).
 
-## 지금 할 일 (전부 Xcode 있는 Mac 필요)
-1. `Packages/ClickCore`에서 `swift test` — 매칭 + EffectTimeline·PhotoPlacement·EffectRendererComposite 통과 확인.
-2. `Click/XCODE_SETUP.md`대로 `Click.xcodeproj` 생성 → `Click/` 컴파일. 컴파일 오류는 UI 소스가 미컴파일이라 있을 수 있음(특히 액터 격리·PhotosPicker API).
-3. 실기기(iPhone 16, iOS 26)에서 전체 흐름 실행 → 보관함 저장(성공 기준 2) + HLG 유지·정지 화면 밝기 확인.
+## 지금 할 일
+1. Xcode에서 번들 ID·개발 팀 지정 → 실기기(iPhone 16, iOS 26)에서 전체 흐름 실행 → 보관함 저장(성공 기준 2) + HLG 유지·정지 화면 밝기 확인.
    첫 실행에서 확인할 추정값: PhotoKit `creationDate`가 EXIF 시각과 같은지(탐색 패딩 5s가 충분한지), Transferable `.current`가 원본 파일(creationdate 메타 포함)을 주는지.
 
 ## 제안 (미승인)
@@ -46,7 +48,7 @@
 - (해결 2026-10-12) 합성 API: 최소 iOS 17 유지, `init(asset:applyingCIFiltersWithHandler:)`(iOS 18 deprecated) 사용. `export(to:as:)`·`states(updateInterval:)`도 iOS 18이라 `export()` + `progress` 폴링.
 
 ## 막힌 것
-- 이 Mac(CLT만)에는 XCTest·Xcode·iOS SDK 없음 → 테스트·앱 빌드·xcodeproj 생성은 Xcode 있는 Mac에서. 2026-10-13 세션도 같은 Mac이라 UI는 소스만 작성.
+- (해결 2026-10-13) Xcode 27.0 설치. 이전 "XCTest 없음" 제약은 사라짐.
 - 이 Mac의 `/usr/bin/python3`에 PIL 없음(다른 python3 없음). 이미지 확인은 `sips`로 JPEG 축소 후 보는 식으로 대신함. CLAUDE.md "검증은 PIL로"는 현재 이 Mac에서 못 씀.
 
 ## 실측 (다시 조사하지 말 것)
