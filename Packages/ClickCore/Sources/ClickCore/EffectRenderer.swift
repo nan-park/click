@@ -4,6 +4,8 @@ import CoreImage
 
 public enum EffectRendererError: Error, Equatable {
     case cannotLoadPhoto(URL)
+    /// 찰칵 음원 파일에 오디오 트랙이 없다.
+    case cannotLoadShutterSound(URL)
     /// 출력 경로에 이미 파일이 있다. 지우는 것은 호출자 책임(실수로 다른 파일을 덮지 않도록).
     case outputExists(URL)
     case exportFailed(String)
@@ -83,8 +85,8 @@ public enum EffectRenderer {
         }
     }
 
-    /// 원본의 비디오·오디오 트랙을 그대로 넣은 AVMutableComposition. 찰칵 소리가 있으면 사진마다 별도 오디오 트랙에 넣는다
-    /// (insertTimeRange는 끼워 넣기라 한 트랙에 이어 넣으면 뒤 소리가 밀린다).
+    /// 원본의 비디오·오디오 트랙을 그대로 넣은 AVMutableComposition. 찰칵 소리가 있으면 사진 시각마다 넣되,
+    /// 겹치지 않는 클립은 한 오디오 트랙을 재사용한다(아래 주석). 영상 끝을 넘는 클립은 영상 길이에서 자른다.
     static func makeComposition(videoURL: URL, config: EffectConfig, placements: [PhotoPlacement]) async throws -> AVMutableComposition {
         let asset = AVURLAsset(url: videoURL)
         let duration = try await asset.load(.duration)
@@ -102,13 +104,32 @@ public enum EffectRenderer {
             }
         }
 
-        if let soundURL = config.shutterSoundURL,
-           let srcSound = try await AVURLAsset(url: soundURL).loadTracks(withMediaType: .audio).first {
+        if let soundURL = config.shutterSoundURL {
+            // 에셋을 변수에 붙들어 둔다 — AVAssetTrack은 에셋을 약하게 참조하므로 임시 에셋이 해제되면
+            // insertTimeRange가 -12780으로 실패한다(2026-10-13 macOS 실측).
+            let soundAsset = AVURLAsset(url: soundURL)
+            guard let srcSound = try await soundAsset.loadTracks(withMediaType: .audio).first else {
+                throw EffectRendererError.cannotLoadShutterSound(soundURL)
+            }
             let soundDuration = try await srcSound.load(.timeRange).duration
-            for p in placements where p.time >= 0 && p.time < duration.seconds {
-                guard let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+            // 내보내기는 오디오 트랙을 섞지 않고 그대로 남기므로(실측: 사진 7장 → 트랙 8개) 트랙 수를 최소로 한다.
+            // 앞 클립이 끝난 뒤에 오는 클립은 같은 트랙 뒤에 붙인다(끝 이후 삽입은 빈 구간이 생길 뿐 밀리지 않는다).
+            // 겹치면 새 트랙. 시각순으로 처리한다.
+            var tracks: [(track: AVMutableCompositionTrack, end: CMTime)] = []
+            for p in placements.sorted(by: { $0.time < $1.time }) where p.time >= 0 && p.time < duration.seconds {
                 let at = CMTime(seconds: p.time, preferredTimescale: duration.timescale)
-                try track.insertTimeRange(CMTimeRange(start: .zero, duration: soundDuration), of: srcSound, at: at)
+                // 영상 끝을 넘으면 합성 길이가 늘어나 출력 영상 꼬리에 비디오 없는 구간이 생기므로 자른다.
+                let clipDuration = CMTimeMinimum(soundDuration, duration - at)
+                let slot: Int
+                if let i = tracks.firstIndex(where: { $0.end <= at }) {
+                    slot = i
+                } else {
+                    // 트랙 생성 실패는 소리 하나만 빠지는 문제라 영상 전체를 실패시키지 않는다.
+                    guard let t = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+                    tracks.append((t, .zero)); slot = tracks.count - 1
+                }
+                try tracks[slot].track.insertTimeRange(CMTimeRange(start: .zero, duration: clipDuration), of: srcSound, at: at)
+                tracks[slot].end = at + clipDuration
             }
         }
         return composition

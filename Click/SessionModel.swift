@@ -96,7 +96,11 @@ final class SessionModel {
                 .appendingPathComponent(AppConfig.outputPrefix + Self.stamp(video.startDate))
                 .appendingPathExtension(Self.outputExtension)
             let job = EffectRenderer.Job(videoURL: videoURL, placements: placements, outputURL: outputURL)
-            let output = try await EffectRenderer.render(job) { [weak self] p in
+            var config = EffectConfig.default
+            config.shutterSoundURL = Bundle.main.url(forResource: AppConfig.shutterSoundName, withExtension: AppConfig.shutterSoundExtension)
+            // 번들에 음원이 없으면 빌드 구성 문제다. 디버그에서는 멈추고, 릴리스에서는 무음으로 계속한다.
+            assert(config.shutterSoundURL != nil, "번들에 \(AppConfig.shutterSoundName).\(AppConfig.shutterSoundExtension) 없음")
+            let output = try await EffectRenderer.render(job, config: config) { [weak self] p in
                 Task { @MainActor in
                     // 폴링 Task가 saving 전환 뒤에 늦게 돌아도 단계를 되돌리지 않는다.
                     if let self, case .rendering = self.phase { self.phase = .rendering(progress: p) }

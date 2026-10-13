@@ -5,6 +5,13 @@
 결과 파일은 HLG 유지. 남은 일은 다듬기뿐.
 
 ## 직전 완료 (2026-10-13)
+- 찰칵 음원 추가(사용자 결정 2026-10-13, 무음 결정 번복): 사용자가 받은 mp3(3.74s, 클릭은 1.64~1.96s, 앞 1.6s 무음)를 1.60~2.20s로 잘라 AAC `Click/Resources/shutter.m4a`(0.6s, 6KB, 클릭 시작 0.04s)로 번들.
+  라이선스: 사용자 제공, 미확인(개인 사용). 앱은 `AppConfig.shutterSoundName`으로 번들 URL을 `EffectConfig.shutterSoundURL`에 넣는다. cli는 `render --sound <file>`.
+  **버그 발견·수정**: 미실행이던 셔터 삽입 코드가 -12780으로 실패 — `AVURLAsset(url:).loadTracks()`를 한 식에 써서 에셋이 즉시 해제됨(AVAssetTrack은 에셋을 약참조). 에셋을 변수에 붙들어 해결.
+  내보내기는 오디오 트랙을 섞지 않고 그대로 둠(실측: 사진마다 트랙 추가 시 출력 8트랙) → 겹치지 않는 클립은 한 트랙 재사용(샘플 7장 → 출력 2트랙, 대체 그룹 없음). 두 트랙이 모두 재생되는 것은 기기 사진 앱에서 확인(사용자, 7번 들림·타이밍·크기 OK); 다른 앱·공유 경로의 재인코딩은 미확인.
+  영상 끝 0.6s 안의 사진은 클립을 영상 길이에서 자른다(리뷰 지적, 안 자르면 합성이 최대 0.6s 길어짐 — 리뷰어 재현).
+  Mac 실측(전 트랙 믹스): 7장 모두 사진 시각 +0.120s에 피크 0.26~0.28(클립 자체의 피크 위치, 시작은 +0.04s), 주변 영상 소리 rms 0.006~0.02. 단위 테스트 6개(`EffectRendererShutterTrackTests`).
+  기기에서 소리 확인은 아래 "지금 할 일".
 - 실기기 검증: 팀 XNZ8K49A2D·번들 ID `com.nanbob.click`(사용자 결정)을 pbxproj에 넣고 `xcodebuild -allowProvisioningUpdates`로 서명(인증서·프로파일 자동 생성) →
   `devicectl`로 설치·실행. 사용자가 폰에서 IMG_4183.MOV 선택 → 권한 전체 허용 → 후보 7장 표시 → 만들기 → "저장 완료". 타이밍 7장 모두 맞음(사용자 눈 확인).
   콘솔 로그 오류 없음. 결과 파일(AirDrop 수신)을 `scripts/describe_video.swift`로 확인: hvc1 10bit BT.2020 HLG + dvvC 유지, 1080×1920 회전 구움, 오디오 1트랙 — macOS 실측과 동일.
@@ -33,9 +40,9 @@
 - 2단계 코어: `PhotoPlacement`(매칭 결과 → crop 비율·오프셋), `EffectTimeline`(시각별 오버레이 사각형, 순수 함수),
   `EffectRenderer`(AVMutableComposition + CIFilter 핸들러 합성 → AVAssetExportSession HEVC, 불가 시 H.264), `EffectConfig`(고정값).
   `clickcore-cli render`로 샘플 7장 합성 — 출력 hvc1 10bit HLG + dvvC 유지(AVMutableComposition 경유 확인), 정지·축소·썸네일 프레임 눈으로 확인.
-  사용자 결정: 정지 0.7s + 좌하단 축소 이동 0.3s / 찰칵 음원 미정(무음, `shutterSoundURL`만 열어둠) / 최소 iOS 17 유지(deprecated 합성 API 사용).
+  사용자 결정: 정지 0.7s + 좌하단 축소 이동 0.3s / 찰칵 음원 미정(무음, `shutterSoundURL`만 열어둠 → 10-13 음원 추가) / 최소 iOS 17 유지(deprecated 합성 API 사용).
   썸네일 폭 22%·여백 4%는 사용자 확정(2026-10-12), 2차 ease-out 곡선은 추정. 적대 리뷰 31건 중 프리셋 폴백 미작동·셔터음 insert 밀림·출력 파일 무단 삭제 등 반영,
-  합성 좌표 변환은 단위 테스트 4개 작성 + 이 Mac에서 같은 단언을 `scripts/composite_check`(swift run)로 9/9 통과 확인. 셔터음 트랙 삽입 코드는 음원이 없어 미실행.
+  합성 좌표 변환은 단위 테스트 4개 작성 + 이 Mac에서 같은 단언을 `scripts/composite_check`(swift run)로 9/9 통과 확인. 셔터음 트랙 삽입 코드는 음원이 없어 미실행(→ 10-13 실행해 보니 버그, 수정).
 - HDR(HLG) 유지 내보내기 가능 여부 조사 → 가능(아래 실측). `scripts/hdr_export_probe.swift`로 이 Mac(macOS, CLT)에서 실측.
   결정: 내보내기는 AVAssetExportSession + `AVAssetExportPresetHEVCHighestQuality` + CIFilter 핸들러 합성, 색 속성은 지정하지 않음(기본 정책이 HLG 유지). 실제 기기(iOS 26) 확인은 3단계(UI)에서(→ 2026-10-13 확인).
 - FrameMatcher: 프레임마다 Vision 평행이동 d 추정(crop 1.0) → |d| 최소 프레임, 동률(같은 크기)은 NCC. 최소 |d|가 폭의 5% 초과면 NCC 폴백.
@@ -43,7 +50,7 @@
   적대 리뷰 12건 반영(Vision dy 부호를 이미지 좌표계로 뒤집음 등). 단위·샘플 테스트 5파일은 작성만(이 Mac에 XCTest 없음 → 2026-10-13 Xcode 설치 후 전부 통과).
 
 ## 지금 할 일
-첫 버전 완료. 이후 과제(CLAUDE.md "첫 버전 범위 밖"): 효과 커스터마이즈 UI, 찰칵 음원. 앱 아이콘 없음(Assets.xcassets 미생성).
+첫 버전 완료(찰칵 소리까지 기기 확인 2026-10-13). 이후 과제(CLAUDE.md "첫 버전 범위 밖"): 효과 커스터마이즈 UI. 앱 아이콘 없음(Assets.xcassets 미생성).
 미확인 샘플(가로 영상, 녹화 중 회전 촬영)은 사용자 샘플이 생기면 그때.
 
 ## 제안 (미승인)
@@ -52,7 +59,7 @@
 ## 열린 결정
 - (해결) 내보내기 형식: HLG 유지, HEVC. SDR로 바꿔야 할 때는 `AVAssetExportPresetHighestQuality`(H.264·BT.709)를 쓰면 됨(실측).
 - (해결 2026-10-13) 정지 화면(SDR 사진): Mac SDR 변환 측정으로 약 30%(감마 단위) 낮고, 기기에서는 눈으로만 "눈에 띄게 어둡다"(수치 없음). 사용자 결정: 그대로 둔다. 보정 안 함.
-- (해결 2026-10-13) 찰칵 음원: 첫 버전은 무음 유지(사용자 결정). `shutterSoundURL`은 열어둠. 시스템 셔터음(AudioServices 1108)은 파일로 못 꺼낸다(추정, 출처 미확인).
+- (해결 2026-10-13) 찰칵 음원: 같은 날 사용자가 mp3를 제공해 번들(위). 시스템 셔터음(AudioServices 1108)은 파일로 못 꺼낸다(추정, 출처 미확인).
 - (해결 2026-10-12) 합성 API: 최소 iOS 17 유지, `init(asset:applyingCIFiltersWithHandler:)`(iOS 18 deprecated) 사용. `export(to:as:)`·`states(updateInterval:)`도 iOS 18이라 `export()` + `progress` 폴링.
 
 ## 막힌 것

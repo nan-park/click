@@ -24,4 +24,4 @@
 | 패키지 | `Packages/ClickCore` 로컬 참조 | 외부 라이브러리 없음 |
 
 소스는 `Click/` 그룹에 파일 단위로 참조한다(동기화 폴더 아님). 새 `.swift`를 추가하면 Xcode에서 타겟에 넣어야 한다.
-`XCODE_SETUP.md`는 그룹에만 있고 Resources 단계에는 없다.
+`XCODE_SETUP.md`는 그룹에만 있고 Resources 단계에는 없다. `Click/Resources/shutter.m4a`는 Resources 단계에 있다(찰칵 음원).

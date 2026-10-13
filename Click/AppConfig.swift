@@ -17,4 +17,7 @@ enum AppConfig {
     static let workspacePrefix = "click-"
     /// 출력 파일 이름 접두사. 뒤에 타임스탬프가 붙는다.
     static let outputPrefix = "Click-"
+    /// 번들에 든 찰칵 음원(`Click/Resources/`). 클릭이 파일 시작 0.04s에 오도록 잘라 둔 0.6s AAC.
+    static let shutterSoundName = "shutter"
+    static let shutterSoundExtension = "m4a"
 }

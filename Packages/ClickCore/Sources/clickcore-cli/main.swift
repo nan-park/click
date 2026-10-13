@@ -6,10 +6,17 @@ import ClickCore
 //   clickcore-cli frames <video> <photo...>  탐색 구간의 프레임 PTS 목록
 //   clickcore-cli match <video> <photo...>   사진별 판정 프레임·방법·점수
 //   clickcore-cli align <video> <photo...>   프레임별 NCC와 Vision 이동량 (판정 과정 확인용)
-//   clickcore-cli render <video> <out.mov> <photo...>  매칭 후 사진 효과를 합성해 내보내기
-let args = Array(CommandLine.arguments.dropFirst())
+//   clickcore-cli render [--sound <audio>] <video> <out.mov> <photo...>  매칭 후 사진 효과를 합성해 내보내기
+var args = Array(CommandLine.arguments.dropFirst())
+// --sound <file>: 찰칵 음원을 사진 시각마다 넣는다(앱이 번들 음원으로 하는 것과 같은 경로를 Mac에서 검증).
+var shutterSoundURL: URL?
+if let i = args.firstIndex(of: "--sound") {
+    guard i + 1 < args.count else { print("--sound needs a file"); exit(2) }
+    shutterSoundURL = URL(fileURLWithPath: args[i + 1])
+    args.removeSubrange(i...(i + 1))
+}
 guard args.count >= 2 else {
-    print("usage: clickcore-cli <meta|frames|match|align> <video> <photo...> | render <video> <out.mov> <photo...>")
+    print("usage: clickcore-cli <meta|frames|match|align> <video> <photo...> | render [--sound <audio>] <video> <out.mov> <photo...>")
     exit(2)
 }
 let command = args[0]
@@ -74,7 +81,7 @@ Task {
                 }
             }
         case "render":
-            guard let outputURL else { print("usage: clickcore-cli render <video> <out.mov> <photo...>"); exit(2) }
+            guard let outputURL else { print("usage: clickcore-cli render [--sound <audio>] <video> <out.mov> <photo...>"); exit(2) }
             var placements: [PhotoPlacement] = []
             for url in photoURLs {
                 let p = try PhotoTimestamp.read(from: url)
@@ -88,7 +95,9 @@ Task {
                 placements.append(placement)
             }
             let t0 = Date()
-            let out = try await EffectRenderer.render(EffectRenderer.Job(videoURL: videoURL, placements: placements, outputURL: outputURL)) { p in
+            var config = EffectConfig.default
+            config.shutterSoundURL = shutterSoundURL
+            let out = try await EffectRenderer.render(EffectRenderer.Job(videoURL: videoURL, placements: placements, outputURL: outputURL), config: config) { p in
                 print(String(format: "  %.0f%%", p * 100))
             }
             print(String(format: "rendered %@ preset=%@ in %.1fs", out.url.lastPathComponent, out.preset, Date().timeIntervalSince(t0)))
