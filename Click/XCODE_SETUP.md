@@ -4,10 +4,11 @@
 시뮬레이터 실행을 확인했다. Xcode GUI로 열어 수정해도 된다. 커밋 대상은 `project.pbxproj`뿐이며, GUI로 처음 열면
 `project.xcworkspace/contents.xcworkspacedata`가 생긴다(커밋해도 무방). 앱 아이콘·Assets.xcassets는 아직 없다.
 
-## 실기기 실행 전에 할 것
-- **번들 ID**: `PRODUCT_BUNDLE_IDENTIFIER = local.Click` 은 자리표시자다. 서명·설치에는 자기 도메인 역순 ID가 필요하니
-  타겟 Signing & Capabilities에서 바꾼다.
-- **개발 팀**: `DEVELOPMENT_TEAM`이 비어 있다. 같은 탭에서 Team을 고른다(자동 서명).
+## 서명 (2026-10-13 설정됨)
+- `PRODUCT_BUNDLE_IDENTIFIER = com.nanbob.click`, `DEVELOPMENT_TEAM = XNZ8K49A2D`(Nan Park, Individual) — 사용자 결정.
+- 자동 서명. 새 Mac에서는 Xcode → Settings → Accounts에 Apple ID 로그인 후
+  `xcodebuild -allowProvisioningUpdates`나 Xcode 실행이 인증서·프로파일을 만든다.
+- 기기 설치·실행은 `xcrun devicectl device install app` / `device process launch --console`로 확인했다.
 
 ## 고정해 둔 설정과 이유
 | 설정 | 값 | 이유 |
