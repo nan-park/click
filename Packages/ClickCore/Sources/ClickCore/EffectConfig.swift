@@ -6,9 +6,9 @@ public struct EffectConfig: Sendable {
     public var freezeDuration: TimeInterval = 0.7
     /// 정지 뒤 좌하단 썸네일 크기로 축소·이동하며 사라지는 시간.
     public var shrinkDuration: TimeInterval = 0.3
-    /// 썸네일 폭 = 프레임 폭 × 이 값. 추정값(iOS 카메라 썸네일 느낌으로 AI가 고름, 사용자 미확인).
+    /// 썸네일 폭 = 프레임 폭 × 이 값. 사용자 확정 2026-10-12.
     public var thumbnailScale: Double = 0.22
-    /// 썸네일의 좌·하단 여백 = 프레임 폭 × 이 값. 추정값(위와 같음).
+    /// 썸네일의 좌·하단 여백 = 프레임 폭 × 이 값. 사용자 확정 2026-10-12.
     public var thumbnailMargin: Double = 0.04
     /// 찰칵 소리 파일. nil이면 무음(음원 미정, 사용자 결정 2026-10-12).
     public var shutterSoundURL: URL? = nil

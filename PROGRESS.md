@@ -8,7 +8,7 @@
   `EffectRenderer`(AVMutableComposition + CIFilter 핸들러 합성 → AVAssetExportSession HEVC, 불가 시 H.264), `EffectConfig`(고정값).
   `clickcore-cli render`로 샘플 7장 합성 — 출력 hvc1 10bit HLG + dvvC 유지(AVMutableComposition 경유 확인), 정지·축소·썸네일 프레임 눈으로 확인.
   사용자 결정: 정지 0.7s + 좌하단 축소 이동 0.3s / 찰칵 음원 미정(무음, `shutterSoundURL`만 열어둠) / 최소 iOS 17 유지(deprecated 합성 API 사용).
-  추정값(사용자 미확인): 썸네일 폭 22%·여백 4%·2차 ease-out. 적대 리뷰 31건 중 프리셋 폴백 미작동·셔터음 insert 밀림·출력 파일 무단 삭제 등 반영,
+  썸네일 폭 22%·여백 4%는 사용자 확정(2026-10-12), 2차 ease-out 곡선은 추정. 적대 리뷰 31건 중 프리셋 폴백 미작동·셔터음 insert 밀림·출력 파일 무단 삭제 등 반영,
   합성 좌표 변환은 단위 테스트 4개 작성 + 이 Mac에서 같은 단언을 `scripts/composite_check`(swift run)로 9/9 통과 확인. 셔터음 트랙 삽입 코드는 음원이 없어 미실행.
 - HDR(HLG) 유지 내보내기 가능 여부 조사 → 가능(아래 실측). `scripts/hdr_export_probe.swift`로 이 Mac(macOS, CLT)에서 실측.
   결정: 내보내기는 AVAssetExportSession + `AVAssetExportPresetHEVCHighestQuality` + CIFilter 핸들러 합성, 색 속성은 지정하지 않음(기본 정책이 HLG 유지). 실제 기기(iOS 26) 확인은 3단계(UI)에서.
